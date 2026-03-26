@@ -230,7 +230,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .wev.ev-ready{background:var(--green)}.wev.ev-cancelled{background:var(--red)}.wev.ev-rescheduled{background:var(--yellow)}
 
 /* MAP */
-.map-layout{display:flex;height:calc(100vh - 106px);gap:0;margin:-20px -24px;overflow:hidden}
+.map-layout{display:flex;height:calc(100vh - 106px);gap:0;overflow:hidden}
 #mapEl{flex:1;min-height:400px}
 .map-panel{width:300px;background:var(--surface);border-left:1.5px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
 .map-panel-hdr{background:var(--brand);color:#fff;padding:14px 16px;font-weight:800;font-size:.88rem;display:flex;align-items:center;gap:8px}
@@ -464,7 +464,6 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Upload File
           </button>
         </div>
-        <!-- Camera input - opens camera on mobile -->
         <input type="file" id="camInput" accept="image/*" capture="environment" style="display:none" onchange="handleFiles(event)">
         <input type="file" id="fileInput" multiple style="display:none" onchange="handleFiles(event)">
         <div class="drop-zone" id="dropZone" ondragover="dOver(event)" ondragleave="dLeave(event)" ondrop="dDrop(event)" onclick="document.getElementById('fileInput').click()">
@@ -546,7 +545,6 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 // DATA & CONFIG
 // ─────────────────────────────────────────
 let appts = JSON.parse(localStorage.getItem('hea_appts2')||'[]');
-// migrate old key
 if(!appts.length){const o=localStorage.getItem('hea_appts');if(o)try{appts=JSON.parse(o);}catch{}}
 
 let curId=null,curFilter='all',curSearch='',xlRows=[],openDD=null;
@@ -556,7 +554,6 @@ const TIMES=['6:00 AM','6:30 AM','7:00 AM','7:30 AM','8:00 AM','8:30 AM','9:00 A
   '2:00 PM','2:30 PM','3:00 PM','3:30 PM','4:00 PM','4:30 PM','5:00 PM','5:30 PM',
   '6:00 PM','6:30 PM','7:00 PM','7:30 PM','8:00 PM'];
 
-// 4 steps only
 const CHECKLIST=[
   {id:'confirmed',  label:'Appointment Confirmed'},
   {id:'photos_done',label:'Photos Taken & Saved'},
@@ -607,7 +604,6 @@ function renderList(){
     return;
   }
 
-  const checkSVG=`<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" width="11" height="11"><polyline points="20 6 9 17 4 12"/></svg>`;
   el.innerHTML=list.map(a=>{
     const[mon,day]=dateParts(a.date);
     const done=CHECKLIST.filter(c=>a.checklist?.[c.id]).length;
@@ -678,23 +674,44 @@ function setFilter(f,el){curFilter=f;document.querySelectorAll('.pill').forEach(
 function filterAppts(q){curSearch=q;renderList();}
 
 // ─────────────────────────────────────────
-// VIEWS
+// VIEWS — FIXED: clean up injected containers before switching
 // ─────────────────────────────────────────
+function cleanupViews(){
+  // Remove any dynamically injected view containers
+  const week=document.getElementById('weekContainer');
+  if(week)week.remove();
+  // Remove any other injected children that aren't the core dashboard elements
+  const ma=document.getElementById('mainArea');
+  Array.from(ma.children).forEach(child=>{
+    const id=child.id;
+    if(id!=='toolbar'&&id!=='listTitle'&&id!=='apptList'){
+      child.remove();
+    }
+  });
+  // Destroy map if it exists
+  if(mapInst){mapInst.remove();mapInst=null;}
+}
+
 function setView(v,el){
   document.querySelectorAll('.snbtn').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
+
+  // ✅ Clean up all previous view remnants
+  cleanupViews();
+
   const ma=document.getElementById('mainArea');
   const sr=document.getElementById('statsRow');
   const tb=document.getElementById('toolbar');
   const lt=document.getElementById('listTitle');
   const al=document.getElementById('apptList');
 
-  // reset defaults
-  ma.style.padding='20px 24px 40px';ma.style.maxWidth='1200px';
+  // Reset defaults
+  ma.style.padding='20px 24px 40px';
+  ma.style.maxWidth='1200px';
   sr.style.display='grid';
-  if(tb){tb.style.display='flex';}
+  if(tb)tb.style.display='flex';
   if(lt){lt.style.display='block';lt.textContent='All Appointments';}
-  if(al){al.style.display='flex';}
+  if(al)al.style.display='flex';
 
   if(v==='dashboard'){
     renderList();
@@ -703,11 +720,11 @@ function setView(v,el){
     if(tb)tb.style.display='none';
     if(lt)lt.style.display='none';
     if(al){al.innerHTML='';al.style.display='none';}
-    // render week inside main area below stats
     renderWeekInMain();
   } else if(v==='map'){
     sr.style.display='none';
-    ma.style.padding='0';ma.style.maxWidth='none';
+    ma.style.padding='0';
+    ma.style.maxWidth='none';
     if(tb)tb.style.display='none';
     if(lt)lt.style.display='none';
     if(al){al.innerHTML='';al.style.display='none';}
@@ -896,10 +913,8 @@ function printById(id){
 // ─────────────────────────────────────────
 let weekOffset=0;
 function renderWeekInMain(){
-  const al=document.getElementById('apptList');
-  if(al){al.innerHTML='';al.style.display='none';}
-  const lt=document.getElementById('listTitle');if(lt)lt.style.display='none';
-  const container=document.createElement('div');container.id='weekContainer';
+  const container=document.createElement('div');
+  container.id='weekContainer';
   document.getElementById('mainArea').appendChild(container);
   buildWeek(container);
 }
@@ -943,10 +958,8 @@ function rebuildWeek(){buildWeek(document.getElementById('weekContainer'));}
 // ─────────────────────────────────────────
 function renderChecklistView(){
   const checkSVG=`<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" width="11" height="11"><polyline points="20 6 9 17 4 12"/></svg>`;
-  const al=document.getElementById('apptList');
-  if(al){al.innerHTML='';al.style.display='none';}
-  const lt=document.getElementById('listTitle');if(lt)lt.style.display='none';
-  const container=document.createElement('div');container.style.maxWidth='520px';
+  const container=document.createElement('div');
+  container.style.maxWidth='520px';
   container.innerHTML=`
   <div style="font-size:1rem;font-weight:800;color:var(--text);margin-bottom:14px">Job Steps Template</div>
   <div style="background:var(--surface);border-radius:var(--rl);padding:20px;border:1.5px solid var(--border);box-shadow:var(--sh-sm)">
@@ -969,7 +982,9 @@ let mapInst=null,myLL=null,myMark=null,apptMarks=[],routeLayer=null,geoCache={},
 
 function renderMapView(){
   const ma=document.getElementById('mainArea');
-  ma.innerHTML=`
+  const mapContainer=document.createElement('div');
+  mapContainer.id='mapViewContainer';
+  mapContainer.innerHTML=`
   <div class="map-layout">
     <div id="mapEl"></div>
     <div class="map-panel">
@@ -998,6 +1013,7 @@ function renderMapView(){
       </div>
     </div>
   </div>`;
+  ma.appendChild(mapContainer);
   setTimeout(()=>{initMap();startGeo();},120);
 }
 
@@ -1030,7 +1046,6 @@ function setLoc(st,msg){
   t.textContent=msg;
 }
 
-// Geocode with Nominatim — add delay to respect rate limit
 let geoQueue=[];let geoRunning=false;
 function geocode(addr){
   return new Promise(resolve=>{
@@ -1052,7 +1067,7 @@ async function runGeoQueue(){
       if(d&&d[0]){const ll=[parseFloat(d[0].lat),parseFloat(d[0].lon)];geoCache[key]=ll;resolve(ll);}
       else{geoCache[key]=null;resolve(null);}
     }catch{resolve(null);}
-    await new Promise(r=>setTimeout(r,1100)); // 1.1s between requests
+    await new Promise(r=>setTimeout(r,1100));
   }
   geoRunning=false;
 }
@@ -1083,7 +1098,7 @@ async function plotAll(){
         <button class="pp-btn pp-btn-r" onclick="showRoute('${a.id}')">Route Here</button>
       </div>`);
     apptMarks.push(m);
-    updateDists(); // update list as each pin is added
+    updateDists();
   }
   updateDists();
 }
